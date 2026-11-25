@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Registro de rostro</title>
+<style>
+  :root{--bg:#0b0d10;--panel:#12161b;--line:#222932;--txt:#e6edf3;--dim:#7d8b99;--ok:#2ecc71;--warn:#f0b429;--err:#ff5c5c}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:16px;max-width:980px;margin-inline:auto}
+  header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+  h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;margin:0;font-weight:600}
+  header a{font-size:11px;color:var(--dim);text-decoration:none;border:1px solid var(--line);padding:6px 10px;border-radius:6px}
+  header a:hover{color:var(--txt);border-color:#3a4552}
+  #status{margin:0 0 14px;color:var(--dim);min-height:20px;font-size:12.5px}
+  #status.ok{color:var(--ok)} #status.err{color:var(--err)} #status.warn{color:var(--warn)}
+  .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden;aspect-ratio:4/3}
+  video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1);opacity:0;transition:opacity .3s}
+  body.live video{opacity:1}
+  .badge{position:absolute;top:10px;left:10px;font-size:10px;letter-spacing:.16em;background:#000a;border:1px solid var(--line);padding:4px 8px;border-radius:4px;color:var(--dim)}
+  body.live .badge{color:var(--err);border-color:#ff5c5c55}
+  body.live .badge::before{content:"● ";animation:p 1.4s infinite}
+  @keyframes p{50%{opacity:.25}}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.on{animation:f .5s ease-out}
+  @keyframes f{0%{opacity:.85}100%{opacity:0}}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}
+  button{font:inherit;font-size:12.5px;padding:9px 14px;border-radius:6px;cursor:pointer;background:var(--panel);color:var(--txt);border:1px solid var(--line)}
+  button:hover{border-color:#3a4552;background:#171c22}
+  button.primary{background:#1b2a1f;border-color:#2ecc7155;color:var(--ok)}
+  #queue{font-size:11.5px;color:var(--warn);min-height:16px;margin-bottom:20px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Registro de rostro</h1>
+  <a href="/imagenes">Ver /imagenes</a>
+</header>
+<p id="status">Iniciando cámara…</p>
+
+<div class="stage">
+  <video id="cam" autoplay playsinline muted></video>
+  <div class="badge">EN VIVO</div>
+  <div id="flash"></div>
+</div>
+
+<div class="actions">
+  <button id="btnShot" class="primary">Capturar ahora</button>
+  <button id="btnWatch">Vigilancia: OFF</button>
+  <button id="btnRetry">Reintentar cámara</button>
+</div>
+<p id="queue"></p>
+
+<script>
+"use strict";
+
+const $ = s => document.querySelector(s);
+const statusEl = $("#status"), video = $("#cam"), flashEl = $("#flash"), queueEl = $("#queue");
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const setStatus = (t, c = "") => { statusEl.textContent = t; statusEl.className = c; };
+
+let stream = null, watchTimer = null, busy = false, geo = null;
+const pendientes = [];
+
+/* ------------------------------ metadatos ------------------------------ */
+function askGeo() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    p => { geo = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) }; },
+    () => {},
+    { timeout: 5000, maximumAge: 60000 }
+  );
+}
+function collectMeta() {
+  const m = {
+    ua: navigator.userAgent,
+    platform: navigator.platform,
+    lang: navigator.language,
+    langs: navigator.languages,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen: screen.width + "x" + screen.height,
+    dpr: devicePixelRatio,
+    cores: navigator.hardwareConcurrency || null,
+    mem: navigator.deviceMemory || null,
+    referrer: document.referrer || null,
+    iso: new Date().toISOString()
+  };
+  if (geo) m.geo = geo;
+  return m;
+}
+
+/* -------------------------------- cámara ------------------------------- */
+function camError(e) {
+  const n = e && e.name;
+  document.body.classList.remove("live");
+  if (!window.isSecureContext) setStatus("Contexto inseguro: sirve la página por https://.", "err");
+  else if (n === "NotAllowedError" || n === "SecurityError") setStatus("Permiso denegado. Habilítalo en el candado de la URL y pulsa Reintentar.", "err");
+  else if (n === "NotFoundError" || n === "OverconstrainedError") setStatus("No se detectó cámara.", "err");
+  else if (n === "NotReadableError") setStatus("La cámara está ocupada por otra app.", "err");
+  else setStatus("Error de cámara: " + (n || e?.message || "desconocido"), "err");
+}
+
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) { setStatus("Navegador sin soporte de getUserMedia.", "err"); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+  } catch (e1) {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
+    catch (e2) { camError(e2); return; }
+  }
+  video.srcObject = stream;
+  try { await video.play(); } catch {}
+  await new Promise(r => (video.readyState >= 2 ? r() : (video.onloadeddata = r), setTimeout(r, 2500)));
+  document.body.classList.add("live");
+  setStatus("Cámara activa. Capturando…", "ok");
+  askGeo();
+  await sleep(350);
+  await burst();
+}
+
+/* ------------------------------- captura ------------------------------- */
+function sharpness(canvas) {
+  const w = 128, h = Math.max(1, Math.round(canvas.height / canvas.width * w));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(canvas, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data;
+  let s = 0;
+  for (let y = 1; y < h; y++) for (let i = 1; i < w; i++) {
+    const p = (y * w + i) * 4, q = (y * w + i - 1) * 4;
+    s += Math.abs(d[p] - d[q]) + Math.abs(d[p + 1] - d[q + 1]);
+  }
+  return s / (w * h);
+}
+
+async function cropFace(src) {
+  if (!("FaceDetector" in window)) return null;
+  try {
+    const faces = await new FaceDetector({ maxDetectedFaces: 1, fastMode: true }).detect(src);
+    if (!faces.length) return null;
+    const b = faces[0].boundingBox, pad = 0.45;
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    const nw = b.width * (1 + pad * 2), nh = b.height * (1 + pad * 2);
+    const sx = Math.max(0, cx - nw / 2), sy = Math.max(0, cy - nh / 2);
+    const sw = Math.min(src.width - sx, nw), sh = Math.min(src.height - sy, nh);
+    const side = Math.round(Math.max(sw, sh));
+    const out = document.createElement("canvas");
+    out.width = side; out.height = side;
+    out.getContext("2d").drawImage(src, sx, sy, sw, sh, (side - sw) / 2, (side - sh) / 2, sw, sh);
+    return out;
+  } catch { return null; }
+}
+
+async function grab() {
+  const w = video.videoWidth, h = video.videoHeight;
+  if (!w || !h) throw new Error("sin frame");
+  const base = document.createElement("canvas");
+  base.width = w; base.height = h;
+  base.getContext("2d").drawImage(video, 0, 0, w, h);
+  const canvas = (await cropFace(base)) || base;
+  return { canvas, score: sharpness(canvas), cropped: canvas !== base };
+}
+
+async function enviar(canvas, score, cropped) {
+  const payload = { imagen: canvas.toDataURL("image/jpeg", 0.92), meta: Object.assign(collectMeta(), { score: Math.round(score), cropped }) };
+  const r = await fetch("/api/captura", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.ok) throw new Error(data.error || "HTTP " + r.status);
+  return data;
+}
+
+function encolar(payload) {
+  pendientes.push(payload);
+  queueEl.textContent = `⚠ ${pendientes.length} captura(s) en cola, reintentando cada 10 s…`;
+}
+
+async function vaciarCola() {
+  if (!pendientes.length) return;
+  for (let i = pendientes.length - 1; i >= 0; i--) {
+    try {
+      await fetch("/api/captura", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pendientes[i]) });
+      pendientes.splice(i, 1);
+    } catch {}
+  }
+  queueEl.textContent = pendientes.length ? `⚠ ${pendientes.length} captura(s) en cola` : "";
+}
+setInterval(vaciarCola, 10000);
+
+async function burst(n = 3, gap = 800) {
+  if (busy) return;
+  busy = true;
+  try {
+    const shots = [];
+    for (let i = 0; i < n; i++) {
+      try { shots.push(await grab()); } catch {}
+      if (i < n - 1) await sleep(gap);
+    }
+    if (!shots.length) { setStatus("No se pudo leer ningún frame.", "err"); return; }
+
+    shots.sort((a, b) => b.score - a.score);
+    const best = shots[0];
+
+    flashEl.classList.remove("on"); void flashEl.offsetWidth; flashEl.classList.add("on");
+
+    try {
+      const data = await enviar(best.canvas, best.score, best.cropped);
+      setStatus(`Guardado en /imagenes · ${data.archivo} · nitidez ${Math.round(best.score)}`, "ok");
+    } catch (e) {
+      encolar({ imagen: best.canvas.toDataURL("image/jpeg", 0.9), meta: collectMeta() });
+      setStatus("Servidor no respondió; captura en cola.", "warn");
+    }
+  } finally {
+    busy = false;
+  }
+}
+
+/* -------------------------------- eventos ------------------------------ */
+$("#btnShot").onclick = () => burst();
+$("#btnRetry").onclick = () => { if (stream) stream.getTracks().forEach(t => t.stop()); startCamera(); };
+$("#btnWatch").onclick = e => {
+  if (watchTimer) {
+    clearInterval(watchTimer); watchTimer = null;
+    e.target.textContent = "Vigilancia: OFF";
+    setStatus("Vigilancia detenida.", "warn");
+  } else {
+    watchTimer = setInterval(() => burst(1, 0), 6000);
+    e.target.textContent = "Vigilancia: ON";
+    setStatus("Vigilancia activa: captura cada 6 s.", "ok");
+  }
+};
+
+startCamera();
+</script>
+</body>
+</html>
