@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: captura-rostros
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATA_DIR
+        value: /var/data/imagenes
+    disk:
+      name: datos
+      mountPath: /var/data
+      sizeGB: 1
